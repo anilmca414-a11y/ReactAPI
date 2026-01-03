@@ -1,0 +1,6 @@
+@DemoDotNetCore_HostAddress = http://localhost:5106
+
+GET {{DemoDotNetCore_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

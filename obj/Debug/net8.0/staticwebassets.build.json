@@ -1,0 +1,12 @@
+{
+  "Version": 1,
+  "Hash": "oeHkH66CQn0nzLn9Kz7bxnLbx2JSMaHYCPWvA6xAoXY=",
+  "Source": "DemoDotNetCore",
+  "BasePath": "_content/DemoDotNetCore",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": [],
+  "Endpoints": []
+}
