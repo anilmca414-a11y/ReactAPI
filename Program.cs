@@ -1,21 +1,17 @@
-using System.Text;
+﻿using System.Text;
 using DemoDotNetCore.Data;
+using DemoDotNetCore.Middleware;
+using DemoDotNetCore.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using DemoDotNetCore.Services;
-
-
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(
-        builder.Configuration.GetConnectionString("DefaultConnection")));
 
-builder.Services.AddIdentity<IdentityUser, IdentityRole>()
-    .AddEntityFrameworkStores<ApplicationDbContext>()
-    .AddDefaultTokenProviders();
+// =======================
+// CORS
+// =======================
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
@@ -27,6 +23,9 @@ builder.Services.AddCors(options =>
     });
 });
 
+// =======================
+// JWT Authentication
+// =======================
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -36,27 +35,53 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-
             ValidIssuer = builder.Configuration["Jwt:Issuer"],
             ValidAudience = builder.Configuration["Jwt:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]))
         };
     });
+
+// =======================
+// Services
+// =======================
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<JwtService>();
-builder.Services.AddAuthentication();
+builder.Services.AddScoped<ITenantProvider, TenantProvider>();
+
+// =======================
+// DbContext (Tenant-aware)
+// =======================
+builder.Services.AddDbContext<ApplicationDbContext>((serviceProvider, options) =>
+{
+    var tenantProvider = serviceProvider.GetRequiredService<ITenantProvider>();
+    var tenant = tenantProvider.GetTenant();
+
+    if (tenant == null || string.IsNullOrEmpty(tenant.ConnectionStrings))
+        throw new Exception("Tenant connection string not resolved");
+
+    options.UseSqlServer(tenant.ConnectionStrings);
+});
+
+// =======================
+// Identity
+// =======================
+builder.Services.AddIdentity<IdentityUser, IdentityRole>()
+    .AddEntityFrameworkStores<ApplicationDbContext>()
+    .AddDefaultTokenProviders();
+
 builder.Services.AddAuthorization();
 builder.Services.AddControllers();
-// Add services to the container.
-
-builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+builder.Services.AddScoped<ITenantResolver, TenantResolver>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// =======================
+// Middleware ORDER MATTERS
+// =======================
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -65,10 +90,14 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+// 🔴 TENANT MUST COME FIRST
+app.UseMiddleware<TenantMiddleware>();
+
+app.UseCors();
+
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-app.UseCors();
-
 
 app.Run();
